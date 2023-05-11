@@ -1,98 +1,65 @@
-"""
-
-"""
-
-# Imports
-from flask import Flask, request
-from kurisu.credentials import BOT_TOKEN, BOT_USERNAME, HEROKU_URL
-import telegram
 import re
+from flask import Flask, request
+import telegram
+from telebot.credentials import bot_token, bot_user_name,URL
 
-# Global variables
+
 global bot
 global TOKEN
-global URL
-
-# Initialize bot
-TOKEN = BOT_TOKEN
-URL = HEROKU_URL
+TOKEN = bot_token
 bot = telegram.Bot(token=TOKEN)
 
-# Initialize Flask app
 app = Flask(__name__)
 
-
-@app.route(f'/{TOKEN}', methods=['POST'])
+@app.route('/{}'.format(TOKEN), methods=['POST'])
 def respond():
-    """
-    App route function for `/{token}` endpoint.
-    
-    This function is called when Telegram sends a POST request to your bot's
-    endpoint. It will parse the request and call the appropriate function
-    to handle the request.
-    """
+   # retrieve the message in JSON and then transform it to Telegram object
+   update = telegram.Update.de_json(request.get_json(force=True), bot)
 
-    # Retrieve message as JSON
-    update = telegram.Update.de_json(request.get_json(force=True), bot)
+   chat_id = update.message.chat.id
+   msg_id = update.message.message_id
 
-    # Retrieve chat identifiers
-    chat_id = update.message.chat.id
-    msg_id = update.message.message_id
-
-    # Decode message text
-    text = update.message.text.encode('utf-8').decode()
-
-    #debug
-    print("Got text message :", f"chat_id: {chat_id}", f"msg_id: {msg_id}", 
-          f"text: {text}", sep="\n")
-    
-    # Welcome message
-    if text == "/start":
-        bot.send_message(
-            chat_id=chat_id, 
-            reply_to_message_id=msg_id,
-            text="""
-Hello, I am Makise Kurisu, your GPT4-powered assint.
-            """
-        )
-
-    else:
-        try:
-            # Send a photo based on numeric characters in the message
-            text = re.sub(r"\W", "_", text)
-            url = "https://api.adorable.io/avatars/285/{}.png".format(text.strip())
-            bot.send_photo(chat_id=chat_id, reply_to_message_id=msg_id, photo=url)
-        except Exception:
-            bot.send_message(
-                chat_id=chat_id,
-                reply_to_message_id=msg_id,
-                text="There was a problem in the name you used. Please try again."
-            )
-
-    return 'ok'
+   # Telegram understands UTF-8, so encode text for unicode compatibility
+   text = update.message.text.encode('utf-8').decode()
+   # for debugging purposes only
+   print("got text message :", text)
+   # the first time you chat with the bot AKA the welcoming message
+   if text == "/start":
+       # print the welcoming message
+       bot_welcome = """
+       Welcome to coolAvatar bot, the bot is using the service from http://avatars.adorable.io/ to generate cool looking avatars based on the name you enter so please enter a name and the bot will reply with an avatar for your name.
+       """
+       # send the welcoming message
+       bot.sendMessage(chat_id=chat_id, text=bot_welcome, reply_to_message_id=msg_id)
 
 
-@app.route('/setwebhook', methods=['GET', 'POST'])
+   else:
+       try:
+           # clear the message we got from any non alphabets
+           text = re.sub(r"\W", "_", text)
+           # create the api link for the avatar based on http://avatars.adorable.io/
+           url = "https://api.adorable.io/avatars/285/{}.png".format(text.strip())
+           # reply with a photo to the name the user sent,
+           # note that you can send photos by url and telegram will fetch it for you
+           bot.sendPhoto(chat_id=chat_id, photo=url, reply_to_message_id=msg_id)
+       except Exception:
+           # if things went wrong
+           bot.sendMessage(chat_id=chat_id, text="There was a problem in the name you used, please enter different name", reply_to_message_id=msg_id)
+
+   return 'ok'
+
+@app.route('/set_webhook', methods=['GET', 'POST'])
 def set_webhook():
-    """
-    App route function for `/setwebhook` endpoint.
-
-    This function is called when you want to set a webhook for your bot. It
-    will set the webhook to the URL of your Heroku app.
-    """
-
-    s = bot.set_webhook(f'{URL}{TOKEN}')
-
-    if s:
-        return "webhook setup ok"
-    else:
-        return "webhook setup failed"
-    
+   s = bot.setWebhook('{URL}{HOOK}'.format(URL=URL, HOOK=TOKEN))
+   if s:
+       return "webhook setup ok"
+   else:
+       return "webhook setup failed"
 
 @app.route('/')
 def index():
-    return '.'
+   return '.'
 
 
 if __name__ == '__main__':
-    app.run(threaded=True)
+   app.run(threaded=True)
